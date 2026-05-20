@@ -1,0 +1,132 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Users table - extends authentication service
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  displayName String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  bookmarks      Bookmark[]
+  rooms          Room[]           @relation("createdRooms")
+  participants   RoomParticipant[]
+  submissions    Submission[]
+  stats          SessionStats?
+
+  @@map("users")
+}
+
+// Bookmarks - user's saved problems
+model Bookmark {
+  id          String   @id @default(cuid())
+  userId      String
+  problemSlug String
+  title       String
+  difficulty  String   // "Easy", "Medium", "Hard"
+  topics      String[] // JSON array
+  notes       String?
+  isSolved    Boolean  @default(false)
+  bookmarkedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, problemSlug])
+  @@index([userId])
+  @@index([difficulty])
+  @@map("bookmarks")
+}
+
+// Rooms - collaboration sessions
+model Room {
+  id           String   @id @default(cuid())
+  creatorId    String
+  title        String?
+  problemSlug  String?
+  language     String   // "python", "javascript", "java", "cpp"
+  accessLevel  String   @default("PUBLIC") // "PUBLIC", "INVITE", "PRIVATE"
+  isActive     Boolean  @default(true)
+  isArchived   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  closedAt     DateTime?
+
+  creator      User              @relation("createdRooms", fields: [creatorId], references: [id], onDelete: Cascade)
+  participants RoomParticipant[]
+  submissions  Submission[]
+
+  @@index([creatorId])
+  @@index([isArchived])
+  @@map("rooms")
+}
+
+// Room participants - track who is in each room
+model RoomParticipant {
+  id        String   @id @default(cuid())
+  roomId    String
+  userId    String
+  role      String   @default("participant") // "creator", "participant"
+  joinedAt  DateTime @default(now())
+  lastSeenAt DateTime @updatedAt
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@index([roomId])
+  @@index([userId])
+  @@map("room_participants")
+}
+
+// Submissions - code submissions during collaboration
+model Submission {
+  id            String   @id @default(cuid())
+  roomId        String
+  userId        String
+  code          String   @db.Text
+  language      String
+  status        String   // "pending", "running", "success", "error"
+  totalTests    Int      @default(0)
+  passedTests   Int      @default(0)
+  testResults   Json?    // Array of test results
+  executionTime Int?     // milliseconds
+  memory        Int?     // bytes
+  timestamp     DateTime @default(now())
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+  @@index([userId])
+  @@index([timestamp])
+  @@map("submissions")
+}
+
+// Session stats - aggregated user statistics
+model SessionStats {
+  id                       String   @id @default(cuid())
+  userId                   String   @unique
+  problemsSolved           Int      @default(0)
+  languagesPracticed       String[] // JSON array of languages
+  totalCollaborationTime   Int      @default(0) // seconds
+  lastActivityAt           DateTime @default(now()) @updatedAt
+  monthYear                String   // "2024-01" format for monthly tracking
+  createdAt                DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([monthYear])
+  @@map("session_stats")
+}
