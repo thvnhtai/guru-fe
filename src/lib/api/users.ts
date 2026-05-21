@@ -1,80 +1,72 @@
-import type { User } from "@/types/auth";
+import type { UserProfile, UpdateProfileRequest, Badge } from '@/types/user'
 
-export interface UserStats {
-  userId: string;
-  problemsSolved: number;
-  languagesPracticed: string[];
-  totalCollaborationTime: number; // seconds
-  lastActivityAt: string;
-  totalRooms: number;
-  successfulSubmissions: number;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+
+async function handleResponse(response: Response) {
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data.message || `Error: ${response.status}`)
+  }
+  return data
 }
 
-/**
- * Fetch current authenticated user
- */
-export async function getCurrentUser(): Promise<User> {
-  try {
-    const response = await fetch("/api/users/me", {
-      method: "GET",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch user: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error("Error fetching user:", error);
-    throw error;
-  }
+// User Profile API
+export async function getUserProfile(userId: string): Promise<UserProfile> {
+  const response = await fetch(`${API_BASE_URL}/api/users/${userId}`)
+  return handleResponse(response)
 }
 
-/**
- * Fetch user statistics
- */
-export async function getUserStats(): Promise<UserStats> {
-  try {
-    const response = await fetch("/api/users/me/stats", {
-      method: "GET",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch stats: ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error("Error fetching stats:", error);
-    throw error;
-  }
+export async function updateProfile(
+  payload: UpdateProfileRequest
+): Promise<UserProfile> {
+  const response = await fetch(`${API_BASE_URL}/api/users/me/profile`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  })
+  return handleResponse(response)
 }
 
-/**
- * Update user profile
- */
-export async function updateUser(
-  updates: Partial<User>
-): Promise<User> {
-  try {
-    const response = await fetch("/api/users/me", {
-      method: "PUT",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updates),
-    });
+export async function getUserBadges(userId: string): Promise<Badge[]> {
+  const response = await fetch(`${API_BASE_URL}/api/users/${userId}/badges`)
+  const data = await handleResponse(response)
+  return data.badges
+}
 
-    if (!response.ok) {
-      throw new Error(`Failed to update user: ${response.statusText}`);
-    }
+// Following API
+export async function toggleFollow(userId: string): Promise<{ following: boolean }> {
+  const response = await fetch(`${API_BASE_URL}/api/users/${userId}/follow`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+  return handleResponse(response)
+}
 
-    return await response.json();
-  } catch (error) {
-    console.error("Error updating user:", error);
-    throw error;
-  }
+export async function getFollowers(
+  userId: string,
+  page: number = 1,
+  limit: number = 20
+) {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) })
+  const response = await fetch(`${API_BASE_URL}/api/users/${userId}/followers?${params}`)
+  return handleResponse(response)
+}
+
+export async function getFollowing(
+  userId: string,
+  page: number = 1,
+  limit: number = 20
+) {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) })
+  const response = await fetch(`${API_BASE_URL}/api/users/${userId}/following?${params}`)
+  return handleResponse(response)
+}
+
+// Stats API (for dashboard)
+export async function getUserStats() {
+  const response = await fetch(`${API_BASE_URL}/api/users/me/stats`, {
+    credentials: 'include',
+  })
+  return handleResponse(response)
 }

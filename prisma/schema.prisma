@@ -16,6 +16,10 @@ model User {
   email     String   @unique
   password  String   // bcrypt hash
   displayName String
+  bio       String?  // max 256 chars
+  avatarUrl String?  // user avatar URL
+  reputation Int     @default(0) // total reputation points
+  isPublic  Boolean  @default(true) // whether profile is public
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -29,6 +33,10 @@ model User {
   userLikes        Like[]           @relation("userLikes")
   sharedSolutions  Solution[]       @relation("sharedSolutions")
   solutionVotes    SolutionVote[]   @relation("solutionVotes")
+  badges           Badge[]          @relation("userBadges")
+  followers        Follow[]         @relation("userFollowers")
+  following        Follow[]         @relation("userFollowing")
+  leaderboardEntries Leaderboard[]  @relation("userLeaderboard")
 
   @@map("users")
 }
@@ -211,4 +219,53 @@ model SolutionVote {
   @@unique([userId, solutionId])
   @@index([userId])
   @@map("solution_votes")
+}
+
+// Badges - achievements earned by users
+model Badge {
+  id         String   @id @default(cuid())
+  userId     String
+  badgeType  String   // "first_solution", "10_solutions", "helpful_comment", "top_contributor"
+  earnedAt   DateTime @default(now())
+
+  user User @relation("userBadges", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeType])
+  @@index([userId, badgeType])
+  @@map("badges")
+}
+
+// Following - user follow relationships
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("userFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("userFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@map("follows")
+}
+
+// Leaderboard - user rankings in categories
+model Leaderboard {
+  id              String   @id @default(cuid())
+  userId          String
+  category        String   // "global", "python", "javascript", "java", "cpp"
+  rank            Int
+  score           Int      @default(0) // weighted score
+  problemsSolved  Int      @default(0)
+  solutionsShared Int      @default(0)
+  updatedAt       DateTime @updatedAt
+
+  user User @relation("userLeaderboard", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category])
+  @@index([category, rank])
+  @@index([userId, category])
+  @@map("leaderboards")
 }
