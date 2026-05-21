@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { ProblemStatement } from "@/components/problem/ProblemStatement";
+import { DiscussionPanel } from "@/components/discussion/DiscussionPanel";
 import Link from "next/link";
 
 interface Props {
@@ -25,7 +26,7 @@ export default async function ProblemDetailPage({ params }: Props) {
   if (!problem) notFound();
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
+    <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
       <Link
         href="/problems"
         className="text-sm text-blue-600 hover:underline mb-4 inline-block"
@@ -33,6 +34,7 @@ export default async function ProblemDetailPage({ params }: Props) {
         ← Back to problems
       </Link>
       <ProblemStatement problem={problem} />
+      <DiscussionPanel problemSlug={problem.titleSlug} />
     </div>
   );
 }

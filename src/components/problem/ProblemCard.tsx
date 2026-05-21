@@ -15,17 +15,22 @@ interface Props {
 }
 
 export function ProblemCard({ problem }: Props) {
-  const { bookmarked, toggleBookmark } = useBookmark(
+  const { bookmarked, toggleBookmarkAsync, isLoading } = useBookmark(
     problem.titleSlug,
     problem.title,
     problem.difficulty,
     problem.topicTags.map((tag) => tag.name)
   );
 
-  const handleBookmarkClick = (e: React.MouseEvent) => {
+  const handleBookmarkClick = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    toggleBookmark();
+    try {
+      await toggleBookmarkAsync();
+    } catch (error) {
+      console.error("Failed to toggle bookmark:", error);
+      // Error is handled in the store; could show toast here
+    }
   };
 
   return (
@@ -68,10 +73,13 @@ export function ProblemCard({ problem }: Props) {
         </span>
         <button
           onClick={handleBookmarkClick}
-          className="p-1.5 hover:bg-gray-100 rounded transition-colors shrink-0"
+          disabled={isLoading}
+          className={`p-1.5 rounded transition-colors shrink-0 ${
+            isLoading ? "opacity-50 cursor-not-allowed" : "hover:bg-gray-100"
+          }`}
           title={bookmarked ? "Remove bookmark" : "Bookmark problem"}
         >
-          <span className="text-lg">
+          <span className={`text-lg inline-block ${isLoading ? "animate-pulse" : ""}`}>
             {bookmarked ? "⭐" : "☆"}
           </span>
         </button>

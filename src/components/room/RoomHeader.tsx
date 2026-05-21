@@ -39,6 +39,7 @@ export function RoomHeader({ onLanguageChange, onLoadProblem, onExport, onRunCod
   const [copied, setCopied] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [accessDropdownOpen, setAccessDropdownOpen] = useState(false);
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
 
   const copyLink = async () => {
     await navigator.clipboard.writeText(buildRoomUrl(roomId));
@@ -208,16 +209,54 @@ export function RoomHeader({ onLanguageChange, onLoadProblem, onExport, onRunCod
             </button>
           )}
 
-          <button
-            onClick={() => void copyLink()}
-            className={`text-xs rounded-md border px-3 py-1.5 transition-all ${
-              copied
-                ? "bg-green-50 border-green-200 text-green-700"
-                : "border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50 hover:border-gray-300"
-            }`}
-          >
-            {copied ? "✓ Copied" : "Copy link"}
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShareMenuOpen(!shareMenuOpen)}
+              className="text-xs rounded-md border border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50 hover:border-gray-300 px-3 py-1.5 transition-colors"
+            >
+              🔗 Share
+            </button>
+
+            {shareMenuOpen && (
+              <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 min-w-[200px]">
+                <button
+                  onClick={async () => {
+                    await copyLink();
+                    setShareMenuOpen(false);
+                  }}
+                  className="block w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  {copied ? "✓ Copy room URL" : "📋 Copy room URL"}
+                </button>
+                <button
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(roomId);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                    setShareMenuOpen(false);
+                  }}
+                  className="block w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                >
+                  {copied ? "✓ Copy room ID" : "🆔 Copy room ID"}
+                </button>
+                {isRoomCreator && (
+                  <>
+                    <div className="border-t border-gray-100" />
+                    <button
+                      onClick={async () => {
+                        await handleGenerateObserverLink();
+                        setShareMenuOpen(false);
+                      }}
+                      className="block w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                      title="Share read-only access link"
+                    >
+                      {copied ? "✓ Copy observer link" : "👁️ Copy observer link"}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
 
           {onToggleStats && (
             <button

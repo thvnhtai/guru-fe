@@ -1,6 +1,6 @@
 import type { AuthResponse, SignupRequest, LoginRequest, User } from "@/types/auth";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_AUTH_API_URL || "http://localhost:3001";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 async function handleAuthResponse(response: Response) {
   const data = await response.json();
@@ -13,7 +13,7 @@ async function handleAuthResponse(response: Response) {
 }
 
 export async function signup(payload: SignupRequest): Promise<AuthResponse> {
-  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -24,7 +24,7 @@ export async function signup(payload: SignupRequest): Promise<AuthResponse> {
 }
 
 export async function login(payload: LoginRequest): Promise<AuthResponse> {
-  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+  const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -35,14 +35,14 @@ export async function login(payload: LoginRequest): Promise<AuthResponse> {
 }
 
 export async function logout(): Promise<void> {
-  await fetch(`${API_BASE_URL}/auth/logout`, {
+  await fetch(`${API_BASE_URL}/api/auth/logout`, {
     method: "POST",
     credentials: "include",
   });
 }
 
 export async function getCurrentUser(): Promise<User> {
-  const response = await fetch(`${API_BASE_URL}/auth/me`, {
+  const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
     method: "GET",
     credentials: "include",
   });
@@ -52,7 +52,7 @@ export async function getCurrentUser(): Promise<User> {
 }
 
 export async function refreshToken(): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+  const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
     method: "POST",
     credentials: "include",
   });

@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/stores/userStore";
-import { useDashboardStats } from "@/lib/hooks/useDashboardData";
 import { StatsCard } from "@/components/dashboard/StatsCard";
 import { RecentRoomsSection } from "@/components/dashboard/RecentRoomsSection";
 import { BookmarksWidget } from "@/components/dashboard/BookmarksWidget";
@@ -11,7 +10,6 @@ import { BookmarksWidget } from "@/components/dashboard/BookmarksWidget";
 export default function DashboardPage() {
   const router = useRouter();
   const { user, logout } = useUserStore();
-  const stats = useDashboardStats();
 
   const handleLogout = async () => {
     await logout();
@@ -80,7 +78,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Sidebar: Stats and Bookmarks */}
           <div className="lg:col-span-1 space-y-6">
-            <StatsCard stats={stats} />
+            <StatsCard />
             <BookmarksWidget />
           </div>
 

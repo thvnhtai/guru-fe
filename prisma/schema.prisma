@@ -14,16 +14,21 @@ datasource db {
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
+  password  String   // bcrypt hash
   displayName String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  bookmarks      Bookmark[]
-  rooms          Room[]           @relation("createdRooms")
-  participants   RoomParticipant[]
-  submissions    Submission[]
-  stats          SessionStats?
+  bookmarks        Bookmark[]
+  rooms            Room[]           @relation("createdRooms")
+  participants     RoomParticipant[]
+  submissions      Submission[]
+  stats            SessionStats?
+  authoredComments Comment[]        @relation("authoredComments")
+  userLikes        Like[]           @relation("userLikes")
+  sharedSolutions  Solution[]       @relation("sharedSolutions")
+  solutionVotes    SolutionVote[]   @relation("solutionVotes")
 
   @@map("users")
 }
@@ -35,7 +40,7 @@ model Bookmark {
   problemSlug String
   title       String
   difficulty  String   // "Easy", "Medium", "Hard"
-  topics      String[] // JSON array
+  topics      String?  // JSON array stored as string
   notes       String?
   isSolved    Boolean  @default(false)
   bookmarkedAt DateTime @default(now())
@@ -51,17 +56,18 @@ model Bookmark {
 
 // Rooms - collaboration sessions
 model Room {
-  id           String   @id @default(cuid())
-  creatorId    String
-  title        String?
-  problemSlug  String?
-  language     String   // "python", "javascript", "java", "cpp"
-  accessLevel  String   @default("PUBLIC") // "PUBLIC", "INVITE", "PRIVATE"
-  isActive     Boolean  @default(true)
-  isArchived   Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  closedAt     DateTime?
+  id              String   @id @default(cuid())
+  creatorId       String
+  title           String?
+  problemSlug     String?
+  language        String   // "python", "javascript", "java", "cpp"
+  accessLevel     String   @default("PUBLIC") // "PUBLIC", "INVITE", "PRIVATE"
+  isActive        Boolean  @default(true)
+  isArchived      Boolean  @default(false)
+  documentState   String?  // Base64-encoded Yjs document state
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  closedAt        DateTime?
 
   creator      User              @relation("createdRooms", fields: [creatorId], references: [id], onDelete: Cascade)
   participants RoomParticipant[]
@@ -95,7 +101,7 @@ model Submission {
   id            String   @id @default(cuid())
   roomId        String
   userId        String
-  code          String   @db.Text
+  code          String
   language      String
   status        String   // "pending", "running", "success", "error"
   totalTests    Int      @default(0)
@@ -119,7 +125,7 @@ model SessionStats {
   id                       String   @id @default(cuid())
   userId                   String   @unique
   problemsSolved           Int      @default(0)
-  languagesPracticed       String[] // JSON array of languages
+  languagesPracticed       String?  // JSON array of languages stored as string
   totalCollaborationTime   Int      @default(0) // seconds
   lastActivityAt           DateTime @default(now()) @updatedAt
   monthYear                String   // "2024-01" format for monthly tracking
@@ -129,4 +135,80 @@ model SessionStats {
 
   @@index([monthYear])
   @@map("session_stats")
+}
+
+// Comments - problem discussions
+model Comment {
+  id              String   @id @default(cuid())
+  authorId        String
+  problemSlug     String   // indexed
+  content         String
+  likes           Int      @default(0)
+  parentCommentId String?  // for threaded replies
+  isEdited        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  author        User      @relation("authoredComments", fields: [authorId], references: [id], onDelete: Cascade)
+  parentComment Comment?  @relation("commentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies       Comment[] @relation("commentReplies")
+  likedBy       Like[]
+
+  @@index([problemSlug, createdAt])
+  @@index([authorId])
+  @@index([parentCommentId])
+  @@map("comments")
+}
+
+// Likes - comment likes
+model Like {
+  id        String   @id @default(cuid())
+  userId    String
+  commentId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation("userLikes", fields: [userId], references: [id], onDelete: Cascade)
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, commentId])
+  @@index([userId])
+  @@map("likes")
+}
+
+// Solutions - shared code solutions
+model Solution {
+  id          String   @id @default(cuid())
+  authorId    String
+  problemSlug String   // indexed
+  code        String
+  language    String
+  explanation String?
+  upvotes     Int      @default(0)
+  views       Int      @default(0)
+  isApproved  Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  author User             @relation("sharedSolutions", fields: [authorId], references: [id], onDelete: Cascade)
+  votes  SolutionVote[]
+
+  @@index([problemSlug, upvotes])
+  @@index([authorId])
+  @@map("solutions")
+}
+
+// Solution votes - upvotes/downvotes on solutions
+model SolutionVote {
+  id         String   @id @default(cuid())
+  userId     String
+  solutionId String
+  voteType   String   // "upvote" | "downvote"
+  createdAt  DateTime @default(now())
+
+  user     User     @relation("solutionVotes", fields: [userId], references: [id], onDelete: Cascade)
+  solution Solution @relation(fields: [solutionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, solutionId])
+  @@index([userId])
+  @@map("solution_votes")
 }

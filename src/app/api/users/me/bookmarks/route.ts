@@ -1,5 +1,7 @@
 import { requireAuth, apiError, apiResponse } from "@/lib/utils/auth";
+import { prisma } from "@/lib/prisma";
 import type { Bookmark } from "@/types/bookmark";
+import { Prisma } from "@prisma/client";
 
 /**
  * GET /api/users/me/bookmarks
@@ -15,53 +17,47 @@ export async function GET(request: Request) {
     const solved = searchParams.get("solved") === "true";
     const search = searchParams.get("search");
 
-    // TODO: Replace with Prisma query
-    // let bookmarks = await prisma.bookmark.findMany({
-    //   where: { userId },
-    // });
-
-    // Mock bookmarks
-    let bookmarks: Bookmark[] = [
-      {
-        id: "1",
-        problemSlug: "two-sum",
-        title: "Two Sum",
-        difficulty: "Easy",
-        topics: ["array", "hash-table"],
-        bookmarkedAt: new Date().toISOString(),
-        isSolved: true,
+    const dbBookmarks = await prisma.bookmark.findMany({
+      where: {
+        userId,
+        ...(difficulty && { difficulty }),
+        ...(solved && { isSolved: true }),
+        ...(search && {
+          OR: [
+            { title: { contains: search } },
+            { problemSlug: { contains: search } },
+          ],
+        }),
       },
-      {
-        id: "2",
-        problemSlug: "binary-tree-level-order-traversal",
-        title: "Binary Tree Level Order Traversal",
-        difficulty: "Medium",
-        topics: ["tree", "bfs"],
-        bookmarkedAt: new Date().toISOString(),
-        isSolved: false,
-      },
-    ];
+      orderBy: { bookmarkedAt: "desc" },
+    });
 
-    // Apply filters
-    if (difficulty) {
-      bookmarks = bookmarks.filter((b) => b.difficulty === difficulty);
-    }
-    if (solved !== undefined) {
-      bookmarks = bookmarks.filter((b) => b.isSolved === solved);
-    }
-    if (search) {
-      bookmarks = bookmarks.filter(
-        (b) =>
-          b.title.toLowerCase().includes(search.toLowerCase()) ||
-          b.problemSlug.toLowerCase().includes(search.toLowerCase())
-      );
-    }
+    const bookmarks: Bookmark[] = dbBookmarks.map((b) => {
+      let topics: string[] = [];
+      if (b.topics) {
+        try {
+          topics = JSON.parse(b.topics);
+        } catch {
+          topics = [];
+        }
+      }
+      return {
+        id: b.id,
+        problemSlug: b.problemSlug,
+        title: b.title,
+        difficulty: b.difficulty as "Easy" | "Medium" | "Hard",
+        topics,
+        bookmarkedAt: b.bookmarkedAt.toISOString(),
+        isSolved: b.isSolved,
+      };
+    });
 
     return apiResponse({ bookmarks, total: bookmarks.length });
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return apiError("Unauthorized", 401);
     }
+    console.error("Error fetching bookmarks:", error);
     return apiError("Failed to fetch bookmarks", 500);
   }
 }
@@ -80,26 +76,35 @@ export async function POST(request: Request) {
       return apiError("Missing required fields", 400);
     }
 
-    // TODO: Replace with Prisma create
-    // const bookmark = await prisma.bookmark.create({
-    //   data: {
-    //     userId,
-    //     problemSlug: body.problemSlug,
-    //     title: body.title,
-    //     difficulty: body.difficulty,
-    //     topics: body.topics || [],
-    //     bookmarkedAt: new Date(),
-    //   },
-    // });
+    const dbBookmark = await prisma.bookmark.create({
+      data: {
+        userId,
+        problemSlug: body.problemSlug,
+        title: body.title,
+        difficulty: body.difficulty,
+        topics: body.topics ? JSON.stringify(body.topics) : null,
+        bookmarkedAt: new Date(),
+        isSolved: body.isSolved || false,
+      },
+    });
+
+    let topics: string[] = [];
+    if (dbBookmark.topics) {
+      try {
+        topics = JSON.parse(dbBookmark.topics);
+      } catch {
+        topics = [];
+      }
+    }
 
     const bookmark: Bookmark = {
-      id: Math.random().toString(),
-      problemSlug: body.problemSlug,
-      title: body.title,
-      difficulty: body.difficulty,
-      topics: body.topics || [],
-      bookmarkedAt: new Date().toISOString(),
-      isSolved: false,
+      id: dbBookmark.id,
+      problemSlug: dbBookmark.problemSlug,
+      title: dbBookmark.title,
+      difficulty: dbBookmark.difficulty as "Easy" | "Medium" | "Hard",
+      topics,
+      bookmarkedAt: dbBookmark.bookmarkedAt.toISOString(),
+      isSolved: dbBookmark.isSolved,
     };
 
     return apiResponse(bookmark, 201);
@@ -107,6 +112,13 @@ export async function POST(request: Request) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return apiError("Unauthorized", 401);
     }
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return apiError("Bookmark already exists for this problem", 409);
+    }
+    console.error("Error creating bookmark:", error);
     return apiError("Failed to create bookmark", 500);
   }
 }

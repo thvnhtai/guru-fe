@@ -1,4 +1,6 @@
 import { requireAuth, apiError, apiResponse, canAccessRoom } from "@/lib/utils/auth";
+import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 /**
  * GET /api/rooms/[roomId]
@@ -14,27 +16,14 @@ export async function GET(
 
     const { roomId } = await params;
 
-    // TODO: Replace with Prisma query
-    // const room = await prisma.room.findUnique({
-    //   where: { id: roomId },
-    //   include: { participants: { include: { user: true } } },
-    // });
+    const room = await prisma.room.findUnique({
+      where: { id: roomId },
+      include: { participants: true },
+    });
 
-    // Mock room
-    const room = {
-      id: roomId,
-      title: "Interview Prep",
-      problemSlug: "merge-sorted-array",
-      language: "python",
-      accessLevel: "PUBLIC",
-      creatorId: "creator-123",
-      participants: [
-        { userId: "user-1", role: "creator", joinedAt: new Date().toISOString() },
-        { userId: "user-2", role: "participant", joinedAt: new Date().toISOString() },
-      ],
-      createdAt: new Date().toISOString(),
-      isActive: true,
-    };
+    if (!room) {
+      return apiError("Room not found", 404);
+    }
 
     // Check access permissions
     const isCreator = userId === room.creatorId;
@@ -49,8 +38,23 @@ export async function GET(
       return apiError("Access denied to this room", 403);
     }
 
-    return apiResponse(room);
+    return apiResponse({
+      id: room.id,
+      title: room.title,
+      problemSlug: room.problemSlug,
+      language: room.language,
+      accessLevel: room.accessLevel,
+      creatorId: room.creatorId,
+      participants: room.participants.map((p) => ({
+        userId: p.userId,
+        role: p.role,
+        joinedAt: p.joinedAt.toISOString(),
+      })),
+      createdAt: room.createdAt.toISOString(),
+      isActive: room.isActive,
+    });
   } catch (error) {
+    console.error("Error fetching room:", error);
     return apiError("Failed to fetch room", 500);
   }
 }
@@ -68,18 +72,44 @@ export async function PUT(
     const { roomId } = await params;
     const body = await request.json();
 
-    // TODO: Replace with Prisma update
-    // Verify user is creator before allowing update
+    // Verify user is creator
+    const room = await prisma.room.findUnique({
+      where: { id: roomId },
+    });
+
+    if (!room) {
+      return apiError("Room not found", 404);
+    }
+
+    if (room.creatorId !== userId) {
+      return apiError("Only room creator can update", 403);
+    }
+
+    const updated = await prisma.room.update({
+      where: { id: roomId },
+      data: {
+        ...(body.title && { title: body.title }),
+        ...(body.accessLevel && { accessLevel: body.accessLevel }),
+      },
+    });
 
     return apiResponse({
-      id: roomId,
+      id: updated.id,
+      title: updated.title,
+      accessLevel: updated.accessLevel,
       message: "Room updated",
-      ...body,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return apiError("Unauthorized", 401);
     }
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return apiError("Room not found", 404);
+    }
+    console.error("Error updating room:", error);
     return apiError("Failed to update room", 500);
   }
 }
@@ -96,13 +126,35 @@ export async function DELETE(
     const userId = await requireAuth();
     const { roomId } = await params;
 
-    // TODO: Verify user is creator, then delete
+    // Verify user is creator
+    const room = await prisma.room.findUnique({
+      where: { id: roomId },
+    });
+
+    if (!room) {
+      return apiError("Room not found", 404);
+    }
+
+    if (room.creatorId !== userId) {
+      return apiError("Only room creator can delete", 403);
+    }
+
+    await prisma.room.delete({
+      where: { id: roomId },
+    });
 
     return apiResponse({ message: "Room deleted", roomId });
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return apiError("Unauthorized", 401);
     }
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return apiError("Room not found", 404);
+    }
+    console.error("Error deleting room:", error);
     return apiError("Failed to delete room", 500);
   }
 }

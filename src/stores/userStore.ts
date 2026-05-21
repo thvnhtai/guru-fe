@@ -4,6 +4,7 @@ import { colorFromString } from "@/lib/utils/colors";
 import type { User } from "@/types/auth";
 import type { Bookmark } from "@/types/bookmark";
 import * as authApi from "@/lib/api/auth";
+import * as bookmarksApi from "@/lib/api/bookmarks";
 
 function generateSessionId(): string {
   return crypto.randomUUID();
@@ -39,8 +40,14 @@ interface UserState {
 
   // Bookmarks
   bookmarks: Bookmark[];
+  isLoadingBookmarks: boolean;
+  bookmarkError: string | null;
   addBookmark: (bookmark: Bookmark) => void;
   removeBookmark: (problemSlug: string) => void;
+  addBookmarkAsync: (bookmark: Omit<Bookmark, "id">) => Promise<void>;
+  removeBookmarkAsync: (problemSlug: string) => Promise<void>;
+  updateBookmarkAsync: (problemSlug: string, updates: { isSolved?: boolean; notes?: string }) => Promise<void>;
+  loadBookmarks: () => Promise<void>;
 }
 
 export const useUserStore = create<UserState, [["zustand/persist", unknown]]>(
@@ -132,6 +139,9 @@ export const useUserStore = create<UserState, [["zustand/persist", unknown]]>(
 
       // Bookmarks
       bookmarks: [],
+      isLoadingBookmarks: false,
+      bookmarkError: null,
+
       addBookmark: (bookmark: Bookmark) =>
         set((state) => {
           const exists = state.bookmarks.some(
@@ -145,6 +155,77 @@ export const useUserStore = create<UserState, [["zustand/persist", unknown]]>(
         set((state) => ({
           bookmarks: state.bookmarks.filter((b) => b.problemSlug !== problemSlug),
         })),
+
+      addBookmarkAsync: async (bookmark: Omit<Bookmark, "id">) => {
+        set({ isLoadingBookmarks: true, bookmarkError: null });
+        try {
+          const created = await bookmarksApi.createBookmark(bookmark);
+          set((state) => ({
+            bookmarks: [created, ...state.bookmarks],
+            isLoadingBookmarks: false,
+          }));
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : "Failed to bookmark";
+          set({ bookmarkError: errorMsg, isLoadingBookmarks: false });
+          // Optimistic fallback: add to local state anyway
+          set((state) => ({
+            bookmarks: [
+              {
+                ...bookmark,
+                id: Math.random().toString(),
+                bookmarkedAt: new Date().toISOString(),
+              } as Bookmark,
+              ...state.bookmarks,
+            ],
+          }));
+        }
+      },
+
+      removeBookmarkAsync: async (problemSlug: string) => {
+        set({ isLoadingBookmarks: true, bookmarkError: null });
+        try {
+          await bookmarksApi.deleteBookmark(problemSlug);
+          set((state) => ({
+            bookmarks: state.bookmarks.filter((b) => b.problemSlug !== problemSlug),
+            isLoadingBookmarks: false,
+          }));
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : "Failed to remove bookmark";
+          set({ bookmarkError: errorMsg, isLoadingBookmarks: false });
+          // Optimistic fallback: remove from local state anyway
+          set((state) => ({
+            bookmarks: state.bookmarks.filter((b) => b.problemSlug !== problemSlug),
+          }));
+        }
+      },
+
+      updateBookmarkAsync: async (problemSlug: string, updates: { isSolved?: boolean; notes?: string }) => {
+        set({ isLoadingBookmarks: true, bookmarkError: null });
+        try {
+          const updated = await bookmarksApi.updateBookmark(problemSlug, updates);
+          set((state) => ({
+            bookmarks: state.bookmarks.map((b) =>
+              b.problemSlug === problemSlug ? updated : b
+            ),
+            isLoadingBookmarks: false,
+          }));
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : "Failed to update bookmark";
+          set({ bookmarkError: errorMsg, isLoadingBookmarks: false });
+        }
+      },
+
+      loadBookmarks: async () => {
+        set({ isLoadingBookmarks: true, bookmarkError: null });
+        try {
+          const bookmarks = await bookmarksApi.getBookmarks();
+          set({ bookmarks, isLoadingBookmarks: false });
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : "Failed to load bookmarks";
+          set({ bookmarkError: errorMsg, isLoadingBookmarks: false });
+          // Keep local bookmarks as fallback
+        }
+      },
     }),
     {
       name: "user-store",

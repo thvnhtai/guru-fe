@@ -1,4 +1,5 @@
 import { requireAuth, apiError, apiResponse } from "@/lib/utils/auth";
+import { prisma } from "@/lib/prisma";
 
 /**
  * POST /api/rooms/[roomId]/submissions
@@ -13,36 +14,46 @@ export async function POST(
     const { roomId } = await params;
     const body = await request.json();
 
-    // TODO: Replace with Prisma create
-    // const submission = await prisma.submission.create({
-    //   data: {
-    //     roomId,
-    //     userId,
-    //     code: body.code,
-    //     language: body.language,
-    //     status: body.status,
-    //     testResults: body.testResults,
-    //   },
-    // });
+    if (!body.code || !body.language) {
+      return apiError("code and language are required", 400);
+    }
 
-    const submission = {
-      id: `sub-${Date.now()}`,
-      roomId,
-      userId,
-      code: body.code,
-      language: body.language,
-      status: body.status,
-      totalTests: body.totalTests || 0,
-      passedTests: body.passedTests || 0,
-      testResults: body.testResults,
-      timestamp: new Date().toISOString(),
-    };
+    const submission = await prisma.submission.create({
+      data: {
+        roomId,
+        userId,
+        code: body.code,
+        language: body.language,
+        status: body.status || "pending",
+        testResults: body.testResults || [],
+        totalTests: body.totalTests || 0,
+        passedTests: body.passedTests || 0,
+        executionTime: body.executionTime,
+        memory: body.memory,
+        timestamp: new Date(),
+      },
+    });
 
-    return apiResponse(submission, 201);
+    return apiResponse(
+      {
+        id: submission.id,
+        roomId: submission.roomId,
+        userId: submission.userId,
+        code: submission.code,
+        language: submission.language,
+        status: submission.status,
+        totalTests: submission.totalTests,
+        passedTests: submission.passedTests,
+        testResults: submission.testResults,
+        timestamp: submission.timestamp.toISOString(),
+      },
+      201
+    );
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return apiError("Unauthorized", 401);
     }
+    console.error("Error recording submission:", error);
     return apiError("Failed to record submission", 500);
   }
 }
@@ -58,28 +69,27 @@ export async function GET(
   try {
     const { roomId } = await params;
 
-    // TODO: Replace with Prisma query
-    // const submissions = await prisma.submission.findMany({
-    //   where: { roomId },
-    //   orderBy: { timestamp: "desc" },
-    // });
+    const submissions = await prisma.submission.findMany({
+      where: { roomId },
+      orderBy: { timestamp: "desc" },
+    });
 
-    const submissions = [
-      {
-        id: "sub-1",
-        roomId,
-        userId: "user-1",
-        code: "print('hello')",
-        language: "python",
-        status: "success",
-        totalTests: 5,
-        passedTests: 5,
-        timestamp: new Date().toISOString(),
-      },
-    ];
+    const response = submissions.map((s) => ({
+      id: s.id,
+      roomId: s.roomId,
+      userId: s.userId,
+      code: s.code,
+      language: s.language,
+      status: s.status,
+      totalTests: s.totalTests,
+      passedTests: s.passedTests,
+      testResults: s.testResults,
+      timestamp: s.timestamp.toISOString(),
+    }));
 
-    return apiResponse({ submissions, total: submissions.length });
+    return apiResponse({ submissions: response, total: response.length });
   } catch (error) {
+    console.error("Error fetching submissions:", error);
     return apiError("Failed to fetch submissions", 500);
   }
 }

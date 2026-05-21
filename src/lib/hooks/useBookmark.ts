@@ -7,16 +7,15 @@ import type { Difficulty } from "@/types/problem";
  * Hook to manage problem bookmarks
  */
 export function useBookmark(problemSlug: string, problemTitle: string, difficulty: Difficulty, topics: string[]) {
-  const { addBookmark, removeBookmark, bookmarks } = useUserStore();
+  const { addBookmarkAsync, removeBookmarkAsync, bookmarks, isLoadingBookmarks } = useUserStore();
 
   const bookmarked = bookmarks.some((b) => b.problemSlug === problemSlug);
 
-  const toggleBookmark = useCallback(() => {
+  const toggleBookmarkAsync = useCallback(async () => {
     if (bookmarked) {
-      removeBookmark(problemSlug);
+      await removeBookmarkAsync(problemSlug);
     } else {
-      const bookmark: Bookmark = {
-        id: problemSlug,
+      const bookmark: Omit<Bookmark, "id"> = {
         problemSlug,
         title: problemTitle,
         difficulty,
@@ -24,9 +23,9 @@ export function useBookmark(problemSlug: string, problemTitle: string, difficult
         bookmarkedAt: new Date().toISOString(),
         isSolved: false,
       };
-      addBookmark(bookmark);
+      await addBookmarkAsync(bookmark);
     }
-  }, [bookmarked, problemSlug, problemTitle, difficulty, topics, addBookmark, removeBookmark]);
+  }, [bookmarked, problemSlug, problemTitle, difficulty, topics, addBookmarkAsync, removeBookmarkAsync]);
 
-  return { bookmarked, toggleBookmark };
+  return { bookmarked, toggleBookmarkAsync, isLoading: isLoadingBookmarks };
 }
